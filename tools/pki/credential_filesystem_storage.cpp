@@ -74,8 +74,8 @@ boost::optional<PrivateKey> CredentialFilesystemStorage::fetch(const PublicKey& 
         PrivateKey priv;
         priv.type = pub.type;
         const BIGNUM* bn_priv = EC_KEY_get0_private_key(ec_key);
-        priv.key.resize(BN_num_bytes(bn_priv));
-        BN_bn2bin(bn_priv, priv.key.data());
+        // keep leading zeros: the key has the width of the group order like generate_private_key()
+        priv.key = make_buffer(bn_priv, BN_num_bytes(EC_GROUP_get0_order(ec_group)));
         return priv;
     }
 
