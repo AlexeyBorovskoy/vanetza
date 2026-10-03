@@ -36,10 +36,15 @@ boost::optional<PrivateKey> parse_pem_private_key(const void* data, std::size_t 
         return boost::none;
     }
 
+    // keep leading zeros: the key has the width of the group order like generate_private_key()
+    const int order_bits = EVP_PKEY_get_bits(evp_key.raw());
+    if (order_bits <= 0) {
+        return boost::none;
+    }
+
     PrivateKey priv_key;
     priv_key.type = openssl_key_type_from_group_name(group);
-    priv_key.key.resize(BN_num_bytes(bn_priv_raw));
-    BN_bn2bin(bn_priv_raw, priv_key.key.data());
+    priv_key.key = make_buffer(bn_priv_raw, (order_bits + 7) / 8);
 
     return priv_key;
 }
