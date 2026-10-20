@@ -158,6 +158,12 @@ MovementEvent& add_event(MovementState& movement, long phase_state)
 
 void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock::time_point& timestamp)
 {
+    set_timing(event, timing, timestamp, TimingOptions());
+}
+
+void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock::time_point& timestamp,
+        const TimingOptions& options)
+{
     const Clock::time_point window_begin = minute_begin(timestamp);
     const Clock::time_point window_end = window_begin + std::chrono::hours(1);
     const auto representable = [&](const Clock::time_point& t) { return t >= window_begin && t < window_end; };
@@ -166,6 +172,9 @@ void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock:
     }
     if (timing.likely && !timing.confidence) {
         throw std::invalid_argument("likely time without confidence");
+    }
+    if ((timing.max_end && *timing.max_end < timing.min_end) || (timing.likely && *timing.likely < timing.min_end)) {
+        throw std::invalid_argument("latest or likely end before the minimum end");
     }
 
     ASN_STRUCT_FREE(asn_DEF_TimeChangeDetails, event.timing);
@@ -177,6 +186,8 @@ void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock:
     }
     if (timing.max_end && representable(ceil_to_tenth(*timing.max_end))) {
         *allocate_optional(details->maxEndTime) = time_mark(ceil_to_tenth(*timing.max_end)).count();
+    } else if (options.always_max_end) {
+        *allocate_optional(details->maxEndTime) = cTimeMarkOutOfRange.count(); // unknown or beyond the window
     }
     if (timing.likely && representable(*timing.likely)) {
         *allocate_optional(details->likelyTime) = time_mark(*timing.likely).count();

@@ -221,8 +221,8 @@ TEST(SpatFunctions, timing_beyond_one_hour)
     MovementTiming timing;
     timing.start = Clock::at("2026-10-04 11:59:59.900");
     timing.min_end = Clock::at("2026-10-05 07:00:00.000");
-    timing.max_end = Clock::at("2026-10-04 13:00:00.000");
-    timing.likely = Clock::at("2026-10-04 13:00:00.000");
+    timing.max_end = Clock::at("2026-10-05 08:00:00.000");
+    timing.likely = Clock::at("2026-10-05 07:30:00.000");
     timing.confidence = 15;
     timing.next = Clock::at("2026-10-04 13:00:00.000");
     set_timing(event, timing, now);
@@ -236,13 +236,13 @@ TEST(SpatFunctions, timing_beyond_one_hour)
     EXPECT_EQ(nullptr, event.timing->nextTime);
 
     timing.start = Clock::at("2026-10-04 12:00:00.000");
-    timing.min_end = Clock::at("2026-10-04 12:59:59.900");
+    timing.min_end = Clock::at("2026-10-04 12:59:59.800");
     timing.max_end = Clock::at("2026-10-04 12:59:59.850"); // rounded up to the last tenth
     timing.likely = timing.min_end;
-    timing.next = timing.min_end;
+    timing.next = Clock::at("2026-10-04 12:59:59.900");
     set_timing(event, timing, now);
 
-    EXPECT_EQ(35999, event.timing->minEndTime);
+    EXPECT_EQ(35998, event.timing->minEndTime);
     ASSERT_NE(nullptr, event.timing->startTime);
     EXPECT_EQ(0, *event.timing->startTime);
     ASSERT_NE(nullptr, event.timing->maxEndTime);
@@ -251,6 +251,107 @@ TEST(SpatFunctions, timing_beyond_one_hour)
     ASSERT_NE(nullptr, event.timing->confidence);
     ASSERT_NE(nullptr, event.timing->nextTime);
     EXPECT_EQ(35999, *event.timing->nextTime);
+}
+
+TEST(SpatFunctions, always_max_end_option)
+{
+    asn1::Spatem spatem;
+    MovementEvent& event = add_event(add_movement(add_intersection_state(spatem->spat, 1, 0), 1),
+        MovementPhaseState_stop_And_Remain);
+
+    const auto now = Clock::at("2026-10-04 12:00:30.000");
+    TimingOptions options;
+    options.always_max_end = true;
+
+    // unknown latest end (C2C-CC RS 2077 RS_ARSM_59)
+    MovementTiming timing;
+    timing.min_end = now + std::chrono::seconds(5);
+    set_timing(event, timing, now, options);
+    ASSERT_NE(nullptr, event.timing->maxEndTime);
+    EXPECT_EQ(cTimeMarkOutOfRange.count(), *event.timing->maxEndTime);
+
+    // latest end beyond the TimeMark window
+    timing.max_end = now + std::chrono::hours(2);
+    set_timing(event, timing, now, options);
+    ASSERT_NE(nullptr, event.timing->maxEndTime);
+    EXPECT_EQ(cTimeMarkOutOfRange.count(), *event.timing->maxEndTime);
+
+    // representable latest end is encoded as usual
+    timing.max_end = now + std::chrono::seconds(10);
+    set_timing(event, timing, now, options);
+    ASSERT_NE(nullptr, event.timing->maxEndTime);
+    EXPECT_EQ(400, *event.timing->maxEndTime); // 12:00:40.0
+
+    // default: omitted when unknown
+    timing.max_end = boost::none;
+    set_timing(event, timing, now);
+    EXPECT_EQ(nullptr, event.timing->maxEndTime);
+}
+
+TEST(SpatFunctions, always_max_end_at_window_end)
+{
+    asn1::Spatem spatem;
+    MovementEvent& event = add_event(add_movement(add_intersection_state(spatem->spat, 1, 0), 1),
+        MovementPhaseState_stop_And_Remain);
+
+    // TimeMarks resolve from 12:00:00.0 to 12:59:59.9
+    const auto now = Clock::at("2026-10-04 12:00:30.000");
+    TimingOptions options;
+    options.always_max_end = true;
+    MovementTiming timing;
+    timing.min_end = now + std::chrono::seconds(5);
+
+    timing.max_end = Clock::at("2026-10-04 12:59:59.900");
+    set_timing(event, timing, now, options);
+    ASSERT_NE(nullptr, event.timing->maxEndTime);
+    EXPECT_EQ(35999, *event.timing->maxEndTime);
+
+    // rounded up across the window end
+    timing.max_end = Clock::at("2026-10-04 12:59:59.950");
+    set_timing(event, timing, now, options);
+    ASSERT_NE(nullptr, event.timing->maxEndTime);
+    EXPECT_EQ(cTimeMarkOutOfRange.count(), *event.timing->maxEndTime);
+
+    set_timing(event, timing, now);
+    EXPECT_EQ(nullptr, event.timing->maxEndTime);
+}
+
+TEST(SpatFunctions, end_before_minimum_end_is_rejected)
+{
+    asn1::Spatem spatem;
+    MovementEvent& event = add_event(add_movement(add_intersection_state(spatem->spat, 1, 0), 1),
+        MovementPhaseState_stop_And_Remain);
+
+    const auto now = Clock::at("2026-10-04 12:00:30.000");
+    MovementTiming previous;
+    previous.min_end = now + std::chrono::seconds(10);
+    previous.max_end = previous.min_end;
+    set_timing(event, previous, now);
+    const TimeChangeDetails_t* const details = event.timing;
+    ASSERT_NE(nullptr, details);
+    const auto expect_previous_timing = [&]() {
+        EXPECT_EQ(details, event.timing);
+        EXPECT_EQ(400, event.timing->minEndTime);
+        ASSERT_NE(nullptr, event.timing->maxEndTime);
+        EXPECT_EQ(400, *event.timing->maxEndTime);
+        EXPECT_EQ(nullptr, event.timing->likelyTime);
+    };
+
+    TimingOptions options;
+    options.always_max_end = true;
+    MovementTiming timing;
+    timing.min_end = now + std::chrono::seconds(5);
+    timing.max_end = Clock::at("2026-10-04 11:59:59.000");
+    EXPECT_THROW(set_timing(event, timing, now, options), std::invalid_argument);
+    expect_previous_timing();
+    EXPECT_THROW(set_timing(event, timing, now), std::invalid_argument);
+    expect_previous_timing();
+
+    timing.max_end = boost::none;
+    timing.likely = now + std::chrono::seconds(4);
+    timing.confidence = 15;
+    EXPECT_THROW(set_timing(event, timing, now), std::invalid_argument);
+    expect_previous_timing();
 }
 
 TEST(SpatFunctions, set_timing_replaces_previous_timing)

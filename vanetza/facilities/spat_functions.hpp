@@ -154,10 +154,33 @@ MovementEvent& add_event(MovementState& movement, long phase_state);
  * \param event movement event (destination)
  * \param timing absolute timing
  * \param timestamp time of the intersection state, see set_timestamp()
- * \throw std::invalid_argument if the minimum end time lies before the timestamp's minute
- * or a likely time comes without confidence
+ * \throw std::invalid_argument if the minimum end time lies before the timestamp's minute,
+ * a likely time comes without confidence or the latest or likely end lies before the minimum end
  */
 void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock::time_point& timestamp);
+
+/**
+ * Options for encoding the timing of movement events
+ */
+struct TimingOptions
+{
+    /**
+     * Always send maxEndTime: an unknown latest end or one beyond the TimeMark window is
+     * encoded as cTimeMarkOutOfRange (C2C-CC RS 2077 RS_ARSM_59). maxEndTime is mandatory in
+     * the C-Roads profile, optional for fixed-time operation in C2C-CC RS 2077 (RS_ARSM_57).
+     */
+    bool always_max_end = false;
+};
+
+/**
+ * Set timing of a movement event with encoding options, see set_timing() above
+ * \param event movement event (destination)
+ * \param timing absolute timing
+ * \param timestamp time of the intersection state, see set_timestamp()
+ * \param options encoding options
+ */
+void set_timing(MovementEvent& event, const MovementTiming& timing, const Clock::time_point& timestamp,
+        const TimingOptions& options);
 
 } // namespace facilities
 } // namespace vanetza
