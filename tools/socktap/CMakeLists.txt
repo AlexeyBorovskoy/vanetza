@@ -11,15 +11,21 @@ add_executable(socktap
     cam_application.cpp
     dcc_passthrough.cpp
     ethernet_device.cpp
+    fixed_time_intersection.cpp
     hello_application.cpp
     link_layer.cpp
     main.cpp
     positioning.cpp
+    priority_request_table.cpp
     raw_socket_link.cpp
+    rlt_application.cpp
     router_context.cpp
     security.cpp
     tcp_link.cpp
     time_trigger.cpp
+    tlc_request_application.cpp
+    tlc_status_application.cpp
+    tlm_application.cpp
     udp_link.cpp
     certificate_validation_v3.cpp
 )
@@ -108,3 +114,5 @@ if(SOCKTAP_WITH_GPSD)
     target_link_libraries(socktap PUBLIC GPS::GPS)
     target_sources(socktap PRIVATE gps_position_provider.cpp)
 endif()
+
+add_test_subdirectory(tests)

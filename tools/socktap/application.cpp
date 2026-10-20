@@ -7,10 +7,15 @@ using namespace vanetza;
 
 Application::DataConfirm Application::request(const DataRequest& request, DownPacketPtr packet)
 {
+    return this->request(request, std::move(packet), this->port());
+}
+
+Application::DataConfirm Application::request(const DataRequest& request, DownPacketPtr packet, PortType destination)
+{
     DataConfirm confirm(DataConfirm::ResultCode::Rejected_Unspecified);
     if (router_ && packet) {
         btp::HeaderB btp_header;
-        btp_header.destination_port = this->port();
+        btp_header.destination_port = destination;
         btp_header.destination_port_info = host_cast<uint16_t>(0);
         packet->layer(OsiLayer::Transport) = btp_header;
 
