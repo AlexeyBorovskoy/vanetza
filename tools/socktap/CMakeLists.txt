@@ -115,4 +115,8 @@ if(SOCKTAP_WITH_GPSD)
     target_sources(socktap PRIVATE gps_position_provider.cpp)
 endif()
 
+# reference vectors of the example intersection, see reference_vectors.hpp
+add_executable(reference-vectors fixed_time_intersection.cpp reference_vectors.cpp reference_vectors_main.cpp)
+target_link_libraries(reference-vectors PUBLIC vanetza)
+
 add_test_subdirectory(tests)
