@@ -1,7 +1,9 @@
 set(CXX_SOURCES
     cam_functions.cpp
+    map_functions.cpp
     path_history.cpp
     path_point.cpp
+    priority_functions.cpp
     spat_functions.cpp
 )
 
